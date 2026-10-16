@@ -1,19 +1,21 @@
-"""Bounds on the two results that rest on pending results: the entry-course gap and the
+"""Sensitivity of the two results that rest on pending results: the entry-course gap and the
 two-semester test.
 
 scripts/10 resolves a pending result (a mark with S, DE, OSS) from the next year's enrolment and
 leaves out the ones it cannot resolve. The paper also reports the results with those counted
 both ways, so this re-runs scripts/10 itself with UNRESOLVED=fail and UNRESOLVED=pass (writing the
-samples to a temporary folder, never over anonymised-data/) and recomputes:
+samples to a temporary folder inside anonymised-data/ that is deleted afterwards) and recomputes:
 
   - the entry-course gap, extended minus augmented, 2024 and 2025 (scripts/21, EntryDiff), and the
     same for students with a single semester-one stream record (SetEntryDiff);
   - the likelihood-ratio test of the NBT over the school mark for passing both semesters
     (scripts/27, TwoSemChiBoth).
 
-Before reporting the bounds it checks that the same code applied to the sample as built
-reproduces the point estimates in paper/tables, so the bounds are computed the same way as the
-reported values. Emits values_pending.tex. Run from the project root.
+These are two scenarios, every unresolved result a fail and every one a pass, not bounds in
+general: a difference between two groups is most extreme when the groups' unresolved results go
+opposite ways. Before reporting the scenarios it checks that the same code applied to the sample as built
+reproduces the point estimates in paper/tables, so the scenarios are computed the same way as
+the reported values. Emits values_pending.tex. Run from the project root.
 """
 import os, re, subprocess, sys, tempfile, warnings
 import numpy as np, pandas as pd, statsmodels.api as sm, statsmodels.formula.api as smf
@@ -42,6 +44,9 @@ def two_semester(d):
     a = d[d.stream.isin(["mainstream", "augmented"]) & d.cohort.isin([2024, 2025])].dropna(
         subset=["nsc", "nbt"]).copy()
     a = a[~((a.s1_pending & a.s1_pass.isna()) | (a.s2_pending & a.s2_pass.isna()))].copy()
+    # as scripts/27: a missing semester-1 result, or an unrecognised semester-2 grade after a
+    # semester-1 pass, is left out rather than counted as a fail
+    a = a[~(a.s1_pass.isna() | ((a.s1_pass == 1) & a.s2_course.notna() & a.s2_pass.isna()))].copy()
     a["cohort"] = a.cohort.astype(str)
     a["both"] = ((a.s1_pass == 1) & (a.s2_pass == 1)).astype(int)
     m0 = smf.glm("both ~ nsc + C(cohort) + stream", a, family=sm.families.Binomial()).fit()
@@ -55,16 +60,18 @@ def load(path):
 
 
 samples = {"as built": load("anonymised-data/paper1_analysis_sample_3streams.csv")}
-tmp = Path(tempfile.mkdtemp(prefix="pending_bounds_"))
-for rule in ("fail", "pass"):
-    out = tmp / f"sample_{rule}_3streams.csv"
-    env = dict(os.environ, UNRESOLVED=rule, OUTCSV=str(out))
-    r = subprocess.run([sys.executable, "scripts/10_build_analysis_sample.py"], env=env,
-                       capture_output=True, text=True)
-    if r.returncode != 0:
-        raise SystemExit(f"scripts/10 failed with UNRESOLVED={rule}:\n{r.stderr[-2000:]}")
-    print(next(l for l in r.stdout.splitlines() if l.startswith("Pending results")))
-    samples[f"unresolved {rule}"] = load(out)
+# The re-built samples are student-level, so they go in a temporary folder inside
+# anonymised-data/ and are deleted when the block ends, whether or not it succeeds.
+with tempfile.TemporaryDirectory(dir="anonymised-data", prefix="tmp_pending_") as tmp:
+    for rule in ("fail", "pass"):
+        out = Path(tmp) / f"sample_{rule}_3streams.csv"
+        env = dict(os.environ, UNRESOLVED=rule, OUTCSV=str(out))
+        r = subprocess.run([sys.executable, "scripts/10_build_analysis_sample.py"], env=env,
+                           capture_output=True, text=True)
+        if r.returncode != 0:
+            raise SystemExit(f"scripts/10 failed with UNRESOLVED={rule}:\n{r.stderr[-2000:]}")
+        print(next(l for l in r.stdout.splitlines() if l.startswith("Pending results")))
+        samples[f"unresolved {rule}"] = load(out)
 
 res = {}
 for lab, d in samples.items():

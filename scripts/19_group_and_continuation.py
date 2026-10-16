@@ -5,8 +5,11 @@ Emits tab_groups.tex, tab_falseexcl.tex, tab_continuation.tex and values_groups.
 Two results that are different claims, kept separate in the paper:
 
   1. VALIDITY. A Cleary-style test of whether school-leaving Mathematics predicts the outcome in
-     the same way across groups, decomposed into intercept and slope components, with the same
-     test for NBT Mathematics.
+     the same way for African students as for all other students together (a binary group
+     indicator, adjusting for stream and cohort), decomposed into intercept and slope
+     components, with the same test for NBT Mathematics. Restricting to school marks of 80 to 95
+     gives every group the same range; it is a sensitivity analysis and does not by itself rule
+     out differential truncation.
   2. COMPOSITION. The false-exclusion table: how many students in each group who passed would be
      excluded by a cut at 80. This depends on where each group's marks sit relative to the cut as
      well as on pass rates below it, so the script also reports below-80 pass rates by group.
@@ -23,7 +26,9 @@ if not Path("anonymised-data").is_dir():
     raise SystemExit("run from the project root")
 T = Path("paper/tables")
 d = pd.read_csv("anonymised-data/paper1_analysis_sample_3streams.csv")
-pgc = [c for c in d.columns if "opulation" in c][0]
+pgc = "Population Grp"   # the name scripts/10 guarantees for every cohort
+if pgc not in d.columns:
+    raise SystemExit(f"no {pgc} column in the analysis sample")
 d = d.rename(columns={"Math Grd12 Fin Rslt": "nsc", "NBT Math Score": "nbt", pgc: "grp"})
 d["cohort"] = d.cohort.astype(str)
 m = d[d.stream.isin(["mainstream", "augmented"])].copy()
@@ -108,7 +113,7 @@ vals |= {"ContBelowAug": f"{100*b80[b80.stream=='augmented'].observed_s2.mean():
 w("values_groups.tex", "\n".join(f"\\newcommand{{\\{k}}}{{{v}}}" for k, v in vals.items()))
 print("\nvalues:", vals)
 
-# ---- decomposition and the common-window check ----------------------------
+# ---- decomposition and the common-window check ------------------------------
 mk2 = mk.copy()
 for var, key in (("nsc", "NSC"), ("nbt", "NBT")):
     f0 = f"s1_mark ~ {var} + stream + cohort"
@@ -117,8 +122,8 @@ for var, key in (("nsc", "NSC"), ("nbt", "NBT")):
     a0, ai, asl = (smf.ols(f, mk2).fit() for f in (f0, fi, fs))
     vals[f"Int{key}"] = f"{2*(ai.llf-a0.llf):.1f}"
     vals[f"Slope{key}"] = f"{2*(asl.llf-ai.llf):.1f}"
-# common-window Cleary: equalises dispersion across groups, so it cannot be a
-# differential-truncation artefact
+# common-window Cleary: every group restricted to the same range of school marks, as a
+# sensitivity analysis for differential truncation
 wnd = mk2[(mk2.nsc >= 80) & (mk2.nsc <= 95)]
 a0 = smf.ols("s1_mark ~ nsc + stream + cohort", wnd).fit()
 a1 = smf.ols("s1_mark ~ nsc * afr + stream + cohort", wnd).fit()

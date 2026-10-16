@@ -2,7 +2,7 @@
 
 Re-runs the loader (scripts/10) under each tie-break rule rather than re-implementing it, so the
 check uses exactly the code that built the sample."""
-import os, subprocess, sys, warnings
+import os, subprocess, sys, tempfile, warnings
 import numpy as np, pandas as pd
 from pathlib import Path
 warnings.simplefilter("ignore")
@@ -17,16 +17,19 @@ def eta(d, var):
     return 100 * ssb / ((s[var] - gm) ** 2).sum()
 
 
-res = {}
-for tb in ("most", "least"):
-    out = f"/tmp/tb_{tb}.csv"
-    env = dict(os.environ, TIEBREAK=tb, OUTCSV=out)
-    subprocess.run([sys.executable, "scripts/10_build_analysis_sample.py"],
-                   env=env, capture_output=True, check=True)
-    d = pd.read_csv(out).rename(columns={"Math Grd12 Fin Rslt": "nsc", "NBT Math Score": "nbt"})
-    res[tb] = (eta(d, "nsc"), eta(d, "nbt"), len(d))
-d = pd.read_csv("/tmp/tb_most.csv").rename(
-    columns={"Math Grd12 Fin Rslt": "nsc", "NBT Math Score": "nbt"})
+res, built = {}, {}
+# The re-built samples are student-level, so they go in a temporary folder inside
+# anonymised-data/ and are deleted when the block ends, whether or not it succeeds.
+with tempfile.TemporaryDirectory(dir="anonymised-data", prefix="tmp_tiebreak_") as tmp:
+    for tb in ("most", "least"):
+        out = Path(tmp) / f"tb_{tb}_3streams.csv"
+        env = dict(os.environ, TIEBREAK=tb, OUTCSV=str(out))
+        subprocess.run([sys.executable, "scripts/10_build_analysis_sample.py"],
+                       env=env, capture_output=True, check=True)
+        built[tb] = pd.read_csv(out).rename(
+            columns={"Math Grd12 Fin Rslt": "nsc", "NBT Math Score": "nbt"})
+        res[tb] = (eta(built[tb], "nsc"), eta(built[tb], "nbt"), len(built[tb]))
+d = built["most"]
 n_amb = int((d.s1_streams_n > 1).sum())
 d2 = d[d.s1_streams_n <= 1]
 res["exclude"] = (eta(d2, "nsc"), eta(d2, "nbt"), len(d2))
@@ -38,5 +41,5 @@ out = {"TieNamb": n_amb, "TieNSCmin": f"{min(ns):.1f}", "TieNSCmax": f"{max(ns):
        "TieNBTmin": f"{min(nb):.1f}", "TieNBTmax": f"{max(nb):.1f}"}
 Path("paper/tables/values_tiebreak.tex").write_text(
     "\n".join(f"\\newcommand{{\\{k}}}{{{v}}}" for k, v in out.items()))
-print("\nreported rule must match the paper (0.2% / 7.8%):", f"{res['most'][0]:.2f}% / {res['most'][1]:.2f}%")
+print("\nreported rule (most supported stream wins):", f"{res['most'][0]:.2f}% / {res['most'][1]:.2f}%")
 print("wrote paper/tables/values_tiebreak.tex:", out)

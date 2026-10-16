@@ -9,11 +9,13 @@ aggregate counts only, never cell values.
 Design:
   * ALLOWLIST of columns to keep. Everything else is dropped by default, so a new identifier
     column in a future extract is dropped rather than leaked.
-  * Identifiers are used to DERIVE safe fields (age from birth date, quintile kept as-is),
-    then discarded.
+  * Identifiers are used only to make the pseudonym, then discarded. No field is derived from
+    a birth date.
   * Student IDs become a truncated HMAC under a secret salt held only by the authors, giving
     consistent pseudonyms across files and years with no mapping file in existence.
-  * Unrecognised columns are reported by name so they can be promoted to the allowlist.
+  * Unrecognised columns are counted and dropped. A dry run prints only the shape of each
+    unrecognised header (letters and digits masked) and writes nothing; --write also lists
+    their names in unknown_columns.txt so they can be promoted to the allowlist.
 """
 import argparse, hashlib, hmac, os, re, secrets, sys, warnings
 from pathlib import Path
@@ -66,8 +68,9 @@ ALLOW |= {
     "status", "lateness h:m:s", "lateness",
     # admin
     "class nbr", "acad prog", "faculty", "level", "course", "course_role",
-    "grade_original", "grade_clean", "numeric_mark", "pass", "coding_note",
-    "first_time_entry", "returning_rs", "number of courses", "note", "pathway_category",
+    "grade_original", "grade_clean", "numeric_mark", "pass",
+    "first_time_entry", "returning_rs", "number of courses", "pathway_category",
+    # free-text note columns ("note", "coding_note") are not kept: free text can carry names
 }
 ALLOW_RX = [re.compile(r) for r in (
     r"^assignment \d", r"^test ?\d+\b", r"^\d+(\.\d+)*[.:] ", r"^mam[23]_",
@@ -89,7 +92,6 @@ DROP_PII  = ID_COLS | {"name", "cell phone", "email", "email.1", "first name",
                        "last name", "birth date", "sa school", "school", "school id",
                        "submission id", "submission time", "view count",
                        "submission count", "end-of-line indicator", "endofline indicator"}
-DERIVE_AGE_FROM = "birth date"
 
 RX = [re.compile(p, re.I) for p in (
     r"[\w.+-]+@[\w-]+\.[\w.]+", r"\b\d{13}\b", r"\b[A-Z]{6}\d{3}\b",
@@ -114,8 +116,8 @@ def get_salt():
     salt = secrets.token_bytes(32)
     SALT_FILE.write_bytes(salt)
     os.chmod(SALT_FILE, 0o600)
-    print(f"  ! new salt written to {SALT_FILE} (mode 600). Delete it to make "
-          f"re-identification infeasible; keep it to add more files later consistently.")
+    print(f"  ! new salt written to {SALT_FILE} (mode 600). Keep it to give later files the "
+          f"same pseudonyms; deleting it means no further file can be linked to these ones.")
     return salt
 
 
@@ -190,15 +192,14 @@ def process(path, salt, write):
         clean = df[keep].copy()
         if ids:
             clean.insert(0, "anon_id", df[ids[0]].map(lambda v: pseudonym(v, salt)))
-        age_col = [c for c, n in cols.items() if n == DERIVE_AGE_FROM]
-        if age_col:
-            bd = pd.to_datetime(df[age_col[0]], errors="coerce")
-            clean["age_at_enrol"] = (pd.Timestamp("2024-01-01") - bd).dt.days // 365
 
         print(f"    [{sheet}] rows={len(df)}  kept={len(keep)}  "
               f"pii_dropped={len(pii)}  unknown_dropped={len(unknown)}"
               f"  key={cols[ids[0]] if ids else 'NONE'}")
-        if unknown:
+        if unknown and not write:
+            print(f"        unknown -> {len(unknown)} columns, shapes only: "
+                  f"{', '.join(redact(cc) for cc in unknown)}")
+        elif unknown:
             print(f"        unknown -> {len(unknown)} columns, names written to "
                   f"unknown_columns.txt (open it yourself; not echoed here)")
             with open("unknown_columns.txt", "a") as fh:
@@ -217,12 +218,11 @@ def process(path, salt, write):
 
 
 ap = argparse.ArgumentParser()
-ap.add_argument("--write", action="store_true")
-ap.add_argument("--dry-run", action="store_true")
+mode = ap.add_mutually_exclusive_group(required=True)
+mode.add_argument("--write", action="store_true")
+mode.add_argument("--dry-run", action="store_true")
 ap.add_argument("--only", help="process only this file or folder inside Full google doc data/")
 a = ap.parse_args()
-if not (a.write or a.dry_run):
-    sys.exit("pass --dry-run or --write")
 root = Path(a.only) if a.only else SRC
 if not root.resolve().is_relative_to(SRC.resolve()):
     sys.exit("--only must point inside Full google doc data/")

@@ -33,7 +33,7 @@ def loco(data, feats):
     for co in sorted(data.cohort.unique()):
         tr, te = data[data.cohort != co], data[data.cohort == co]
         if tr.s1_pass.nunique() < 2:
-            continue
+            raise ValueError(f"holding out {co}: the training cohorts have one outcome class")
         m = Pipeline([("sc", StandardScaler()),
                       ("lr", LogisticRegressionCV(Cs=6, cv=4, max_iter=3000,
                                                   scoring="neg_log_loss"))])
@@ -46,8 +46,11 @@ def passers(data, score=None):
     tot = 0
     for co, g in data.groupby("cohort"):
         n_c = int((g.nsc >= 80).sum())
+        if score is not None and g[score].isna().any():
+            raise ValueError(f"cohort {co}: some students have no predicted probability")
         sel = (g.nsc >= 80) if score is None else (g[score].rank(ascending=False,
                                                                  method="first") <= n_c)
+        assert int(sel.sum()) == n_c, (co, int(sel.sum()), n_c)
         tot += int(g.loc[sel, "s1_pass"].sum())
     return tot
 
@@ -63,13 +66,12 @@ print("refit-and-reselect bootstrap, 300 replicates (slow by design):")
 for i in range(300):
     b = pd.concat([g.sample(len(g), replace=True, random_state=int(rng.integers(1e9)))
                    for _, g in c.groupby("cohort")]).reset_index(drop=True)
-    try:
-        b["p_both"] = loco(b, ["nsc", "nbt"]); b["p_full"] = loco(b, P6)
-        bb = passers(b)
-        for col in diffs:
-            diffs[col].append(passers(b, col) - bb)
-    except Exception:
-        continue
+    # Every replicate must refit and admit the matched volume; a failure stops the script
+    # rather than being skipped, so the interval always rests on all 300.
+    b["p_both"] = loco(b, ["nsc", "nbt"]); b["p_full"] = loco(b, P6)
+    bb = passers(b)
+    for col in diffs:
+        diffs[col].append(passers(b, col) - bb)
 for col, tag in (("p_both", "Both"), ("p_full", "Full")):
     lo, hi = np.percentile(diffs[col], [2.5, 97.5])
     v[f"Adm{tag}CI"] = f"[{lo:+.0f}, {hi:+.0f}]"

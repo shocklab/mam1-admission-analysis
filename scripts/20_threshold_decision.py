@@ -3,11 +3,14 @@
 Emits values_threshold.tex. Three parts:
 
   1. Error counts at each candidate cut, and where the two curves cross.
-  2. A PERMUTATION TEST on that crossing. Repeating the exercise with the pass outcome randomly
-     shuffled tests whether the crossing's position is set by the mark distribution and the base
-     rate rather than by who passes. If it is, the crossing is not evidence that a given cut is
-     well chosen.
-  3. The exchange rate: successful students lost per failure avoided, as the cut moves.
+  2. Why the crossing says nothing about who passes. At any cut, successful students excluded
+     minus admitted students who fail equals the number who pass minus the number admitted,
+     whichever students those are. So the counts cross where the cut admits as many students as
+     pass: the position is set by the mark distribution and the pass rate. The identity is
+     checked at every cut; shuffling the pass outcome, which leaves the crossing where it is, is
+     kept as an illustration.
+  3. The exchange rate: successful students lost per failure avoided, as the cut moves. A band
+     with no failures has no finite rate and is reported as such.
 
 Also computes the standard error on the jump at 80, which is what supports "absence of evidence
 for a jump" rather than "evidence there is none". Run from the project root.
@@ -33,7 +36,10 @@ def crossing(nsc, y):
     return np.nan
 
 
-# the crossing is a property of the mark distribution, not of its validity
+# the crossing is a property of the mark distribution, not of its validity: the identity
+for k in np.arange(70, 96, 0.5):
+    excl_pass = ((c.nsc < k) & (c.s1_pass == 1)).sum(); adm_fail = ((c.nsc >= k) & (c.s1_pass == 0)).sum()
+    assert excl_pass - adm_fail == (c.s1_pass == 1).sum() - (c.nsc >= k).sum(), k
 perm = [crossing(c.nsc.values, rng.permutation(c.s1_pass.values)) for _ in range(400)]
 v["PermCross"] = f"{np.median(perm):.1f}"
 v["PermPct"] = f"{100*np.mean([79 <= x <= 80 for x in perm]):.0f}"
@@ -59,12 +65,14 @@ v |= {"JumpSE": f"{se:.2f}", "JumpLo": f"{b-1.96*se:+.1f}", "JumpHi": f"{b+1.96*
 def rate_ci(lo_, hi_):
     band = c[(c.nsc >= lo_) & (c.nsc < hi_)]
     y = band.s1_pass.values
-    r = [max(yy.sum(), 0) / max((yy == 0).sum(), 1)
+    # a resample with no failures has no finite rate: it counts as infinite, not as one failure
+    r = [yy.sum() / (yy == 0).sum() if (yy == 0).any() else np.inf
          for yy in (rng.choice(y, len(y)) for _ in range(4000))]
     return np.percentile(r, [2.5, 97.5])
 lo_, hi_ = rate_ci(78, 80)
 v |= {"RateDownLo": f"{lo_:.1f}", "RateDownHi": f"{hi_:.1f}"}
-v["RateSeventyfive"] = f"{c[(c.nsc>=75)&(c.nsc<80)].s1_pass.sum()/max((c[(c.nsc>=75)&(c.nsc<80)].s1_pass==0).sum(),1):.1f}"
+_b = c[(c.nsc >= 75) & (c.nsc < 80)]
+v["RateSeventyfive"] = f"{_b.s1_pass.sum() / (_b.s1_pass == 0).sum():.1f}" if (_b.s1_pass == 0).any() else "no failures"
 Path("paper/tables/values_threshold.tex").write_text(
     "\n".join(f"\\newcommand{{\\{k}}}{{{x}}}" for k, x in v.items()))
 print("wrote values_threshold.tex:", v)

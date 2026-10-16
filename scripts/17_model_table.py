@@ -13,7 +13,12 @@ Emits tab_models.tex. Two design choices carry the result:
 
 The paired bootstrap resamples students while holding the fitted models fixed, so it measures
 evaluation-set noise and not the variability of refitting. With three cohorts that second source
-is large, which is why the paper also reports a cohort-level t interval.
+is large, which is why the paper also reports a cohort-level t interval, computed by scripts/36
+from the held-out predictions this script saves to anonymised-data/model_oof_predictions.csv.
+
+The spline bases and scaling are fitted on all the training cohorts before the inner
+cross-validation that chooses each penalty, so they are not refitted within the inner folds. The
+held-out cohort is never used in fitting.
 Run from the project root.
 """
 import warnings, numpy as np, pandas as pd
@@ -67,7 +72,7 @@ y = r.s1_mark.values
 LINEAR = ["Linear, main effects only", "Ridge (splines + pairwise)", "Elastic net (splines + pairwise)"]
 base = max(LINEAR, key=lambda n: r2_score(y, oof[n]))
 print(f"\ncomparator, the best regularised linear model by held-out-year R2: {base}")
-print("\npaired bootstrap, 10000 reps x 5 outer seeds:")
+print("\npaired bootstrap, 2000 reps x 5 outer seeds (10000 in all):")
 ci = {}
 for name in ("Random forest", "Gradient boosting"):
     allb = []

@@ -9,7 +9,8 @@ script reports what is needed to make a null informative rather than merely non-
   - omega-squared as well as eta-squared, because eta-squared is biased upward and is above zero
     in expectation even when there is no effect
   - the same comparison BY COHORT, since a pooled null can hide differences of opposite sign
-  - a movers sensitivity, restricting to students never reassigned between streams
+  - a movers sensitivity, restricting to students with a single semester-1 stream record (a
+    change of stream between semester 1 and semester 2 is not counted as a move)
 
 The entry-course comparison is the one outcome available for all three streams, since MAM1005H
 has no semester-1 result. 2026 is excluded from it because most extended grades were unresolved.
@@ -93,6 +94,7 @@ Path(T/"values_placement.tex").write_text(
 print("values:", v)
 
 # ---- movers sensitivity (students can move between streams during the year) --------
+# Single semester-1 stream record only; a semester-2 change of stream is not counted.
 settled = d[d.s1_streams_n <= 1]
 sub = settled[settled.stream.isin(["extended", "augmented"])]
 e2, a2 = sub[sub.stream == "extended"], sub[sub.stream == "augmented"]

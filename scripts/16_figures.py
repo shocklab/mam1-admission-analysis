@@ -4,16 +4,16 @@ Okabe-Ito hues throughout, validated for colour-vision deficiency (worst adjacen
 under deuteranopia).
 
 Figure 1 (a) the two measures with the proposed cut, (b) observed pass rates by benchmark band.
-  Panel (a) is monochrome, so that colour has one meaning in the figure: in panel (b) it marks
-  school marks of 80 or above against below 80. The two misallocation quadrants are shaded and
-  carry only their count; the explanation is in the caption. Panel (b) shows observed rates with
-  Wilson intervals rather than a fitted surface, because the additive spline goes non-monotone
-  where the data are thin.
+  Panel (a) shows all points in one colour, so that colour has one meaning in the figure: in
+  panel (b) it marks school marks of 80 or above against below 80. The two misallocation
+  quadrants are shaded and carry their count and a short label; the explanation is in the
+  caption. Panel (b) shows observed rates with Wilson intervals rather than a fitted surface,
+  because the additive spline goes non-monotone where the data are thin.
 
 Figure 2 distributions of both measures by stream, with p-values.
 
 Figure 3 the two error counts across candidate thresholds. The crossing is not evidence that 80
-  is well chosen: see the permutation test in scripts/20.
+  is well chosen: see the identity checked in scripts/20.
 
 Writes into paper/figures/. Run from the project root.
 """
@@ -53,9 +53,10 @@ a.scatter(qs.nsc + rng.normal(0, .20, len(qs)), qs.nbt, s=7, c=INK, alpha=.22,
 a.axvline(80, color=INK, lw=1.1, ls="--", zorder=3)
 a.axhline(med, color=INK, lw=.8, ls=":", zorder=3)
 n_excl = len(qs[(qs.nsc < 80) & (qs.nbt > med)]); n_adm = len(qs[(qs.nsc >= 80) & (qs.nbt <= med)])
-# All text is kept OFF the data: the quadrants carry only their count, placed in the emptiest
+# All text is kept OFF the data: the quadrants carry their count and a short label, placed in
+# the emptiest
 # corner of each shaded block, and both line labels sit outside the axes. The sentence that
-# explains what the counts mean belongs in the caption, not on top of 962 points.
+# explains what the counts mean belongs in the caption, not on top of the points.
 SHADE = "#FBEFE6"          # VERM at alpha .10 composited over white
 BOX = dict(fc=SHADE, ec="none", pad=1.0)
 a.text(70.4, 99.5, f"{n_excl}", fontsize=15, color=VERM, ha="left", va="top",
@@ -75,7 +76,7 @@ a.set(xlabel="School-leaving Mathematics (%)", ylabel="NBT Mathematics", xlim=XL
 a.set_yticks([30, 40, 50, 60, int(med), 80, 90, 100])
 a.set_yticklabels(["30", "40", "50", "60", f"{med:.0f}", "80", "90", "100"])
 [lb.set_color(INK) for lb in a.get_yticklabels() if lb.get_text() == f"{med:.0f}"]
-# No in-plot label for the median: the tick at 71 marks it and the caption names it.
+# No in-plot label for the median: its labelled tick marks it and the caption names it.
 # Any text placed near the line would sit over data.
 a.set_title("(a) Where the two measures disagree", loc="left", fontsize=9, color=INK, pad=16)
 

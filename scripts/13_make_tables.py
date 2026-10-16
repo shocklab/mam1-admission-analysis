@@ -23,9 +23,10 @@ T = Path("paper/tables"); T.mkdir(parents=True, exist_ok=True)
 d = pd.read_csv("anonymised-data/paper1_analysis_sample_3streams.csv").rename(
     columns={"Math Grd12 Fin Rslt": "nsc", "NBT Math Score": "nbt"})
 d["cohort"] = d.cohort.astype(str)
-# "two" is the mainstream+augmented sample. Outcome analyses use it because MAM1005H runs a
-# full year and so has no semester-1 outcome to compare; "d" (all three streams) is used for
-# intake and placement, where the extended students are the point.
+# "two" is the separately built two-stream sample (scripts/10), used only for the counts that
+# compare the two samples. Outcome analyses use "m" below, the mainstream and augmented students
+# of the three-stream sample, because MAM1005H runs a full year and so has no semester-1 outcome
+# to compare; "d" (all three streams) is used for intake and placement.
 two = pd.read_csv("anonymised-data/paper1_analysis_sample_2streams.csv").rename(
     columns={"Math Grd12 Fin Rslt": "nsc", "NBT Math Score": "nbt"})
 
@@ -88,8 +89,8 @@ print(f"  below-80 in top half NBT = {below_top}; 80+ in bottom quartile = {abov
 # ---- Table 3: nested models ------------------------------------------------
 m = d[d.stream.isin(["mainstream", "augmented"])]
 mk = m.dropna(subset=["nsc", "nbt", "s1_mark"]); pa = m.dropna(subset=["nsc", "nbt", "s1_pass"])
-# The nested models. Splines rather than straight lines, so "is the relationship smooth?" is
-# tested rather than assumed; stream and cohort are adjusted for throughout. The
+# The nested models. Spline bases rather than straight lines, so the shape of each relationship
+# is estimated rather than assumed linear; stream and cohort are adjusted for throughout. The
 # variance-explained columns are for the WHOLE model including stream and cohort, not for the
 # mathematics measure alone.
 FM = "s1_mark ~ bs(nsc, df=4) + bs(nbt, df=4) + stream + cohort"
@@ -205,13 +206,14 @@ for cut_a, cut_b, tag in ((78, 80, "Down"), (80, 85, "Up")):
     band = cc[(cc.nsc >= cut_a) & (cc.nsc < cut_b)]
     np_, nf_ = int(band.s1_pass.sum()), int((band.s1_pass == 0).sum())
     vals |= {f"N{tag}": len(band), f"Pass{tag}": np_, f"Fail{tag}": nf_,
-             f"Rate{tag}": f"{np_/max(nf_,1):.1f}"}
+             f"Rate{tag}": f"{np_/nf_:.1f}" if nf_ else "no failures"}
 rates = []
 for k in range(75, 86):
     if k == 80: continue
     lo2, hi2 = (k, 80) if k < 80 else (80, k)
     b2 = cc[(cc.nsc >= lo2) & (cc.nsc < hi2)]
-    if len(b2): rates.append(b2.s1_pass.sum() / max((b2.s1_pass == 0).sum(), 1))
+    nf2 = int((b2.s1_pass == 0).sum())
+    if len(b2): rates.append(b2.s1_pass.sum() / nf2 if nf2 else np.inf)
 vals |= {"RateMin": f"{min(rates):.1f}", "RateMax": f"{max(rates):.1f}"}
 vals |= {"MatchExclA": int(((cc.nsc<80)&(cc.s1_pass==1)).sum()),
          "MatchAdmA": int(((cc.nsc>=80)&(cc.s1_pass==0)).sum())}

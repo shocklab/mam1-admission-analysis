@@ -2,11 +2,17 @@
 
 Population: first-time entrants who appear in any of the pathway course codes and have all six
 pre-university measures. Outcome coding: numeric marks are parsed directly; a trailing A (absent
-from the supplementary) is stripped and the mark kept, a fail; a mark recorded twice ("68; 68")
-collapses to one mark, and two different marks become missing; UP and PA are passes with no
-mark; AB, INC, LOA, DPR and UF are not passed, with no mark. A trailing S, DE and OSS are results
-not yet in when the extract was pulled; they are resolved from the next year's enrolment
-(CHOICE 6).
+from the supplementary) is stripped and the mark kept, and the result is a fail whatever the
+mark; a mark recorded twice ("68; 68") collapses to one mark, and two different marks become
+missing; UP and PA are passes with no mark; AB, INC, LOA, DPR and UF are not passed, with no mark.
+A trailing S, DE and OSS are results not yet in when the extract was pulled, including when
+repeated ("47S; 47S"); they are resolved from the next year's enrolment (CHOICE 6). Any other
+code, and a blank grade, gives no mark and no pass flag.
+
+Input: one workbook per cohort with an "Early Assessment" sheet (one row per student: anon_id,
+the six pre-university measures under the column names in PRED, "Population Grp", "Gender" and
+an academic-year-of-study column whose value starts with "first" for a first-time entrant) and a
+"Detail" sheet (one row per course record: anon_id, "Course Code", "Grade Code").
 
 Every number in the paper comes from the CSV this script writes, so the judgement calls below
 decide everything downstream. Each is marked in the code with "CHOICE":
@@ -22,7 +28,8 @@ decide everything downstream. Each is marked in the code with "CHOICE":
 
 Run from the project root. Writes the three-stream sample used by the analyses, and a
 two-stream sample (mainstream and augmented only) used for comparison counts and for the
-validation check at the end.
+validation check at the end, which stops the script if the 2024 and 2025 two-stream counts
+differ from the original analysis of these data.
 """
 import re, warnings, numpy as np, pandas as pd
 from pathlib import Path
@@ -38,6 +45,7 @@ FILES = {2024: P1 / "MAM1 2024 Data_RAW.xlsx", 2025: P1 / "MAM1 2025 Data.xlsx",
 # The six pre-university measures. A student must have all six to enter the sample.
 PRED = ["Math Grd12 Fin Rslt", "Eng Grd12 Fin Rslt", "Phy Sci Grd12 Fin Rslt",
         "NBT Math Score", "NBT QL Score", "NBT AL Score"]
+DEMO = ["Population Grp", "Gender"]
 # TWO_STREAM: mainstream and augmented, both semesters, without the extended stream.
 TWO_STREAM = ["MAM1031F", "MAM1033F", "MAM1032S", "MAM1034S"]
 # CHOICE 2. MAM1006H is the SECOND-year half of the extended sequence. Students appearing only
@@ -60,16 +68,18 @@ def parse_mark(v):
     """CHOICE 4b. Turn a Grade Code cell into a numeric mark, or NaN if it is not one.
 
     Handles three awkward cases found in the extracts:
-      "45A"    a mark with a trailing letter -> 45.0 (the suffix is stripped)
+      "45A"    a mark with a trailing A      -> 45.0 (the suffix is stripped)
       "68; 68" the same mark recorded twice  -> 68.0
       "68; 71" two DIFFERENT marks           -> NaN, because there is no basis for picking one
+    Any other trailing letter ("60X") is not a recognised code, so the cell is not a mark (NaN).
+    A trailing S never reaches here: is_pending() catches it first.
     """
     if pd.isna(v): return np.nan
     t = str(v).strip()
     if t == "" or t.lower() == "nan": return np.nan
     nums = []
     for part in [p.strip() for p in t.split(";") if p.strip()]:
-        m = re.fullmatch(r"([0-9]+(?:\.[0-9]+)?)([A-Za-z]*)", part)
+        m = re.fullmatch(r"([0-9]+(?:\.[0-9]+)?)([Aa]?)", part)
         if not m: return np.nan
         nums.append(float(m.group(1)))
     return nums[0] if nums and len(set(nums)) == 1 else np.nan
@@ -79,8 +89,8 @@ def is_pending(v):
     """True for a result not yet in when the extract was pulled: a mark with a trailing S, or
     DE or OSS. Such a result has neither a mark nor a pass flag until CHOICE 6 resolves it."""
     if pd.isna(v): return False
-    t = str(v).strip().upper()
-    return t in PENDING_C or bool(re.fullmatch(r"[0-9]+(?:\.[0-9]+)?S", t))
+    parts = [p.strip() for p in str(v).strip().upper().split(";") if p.strip()]
+    return any(t in PENDING_C or re.fullmatch(r"[0-9]+(?:\.[0-9]+)?S", t) for t in parts)
 
 
 def outcome(v):
@@ -93,7 +103,9 @@ def outcome(v):
     """
     if is_pending(v): return np.nan, np.nan, True
     mark = parse_mark(v)
-    if not np.isnan(mark): return mark, float(mark >= 50), False
+    if not np.isnan(mark):
+        absent = str(v).strip().upper().endswith("A")   # absent from the supplementary: a fail
+        return mark, 0.0 if absent else float(mark >= 50), False
     code = str(v).strip().upper()
     if code in PASS_C: return np.nan, 1.0, False
     if code in FAIL_C: return np.nan, 0.0, False
@@ -105,7 +117,9 @@ for _v, _want in (("47", (47.0, 0.0, False)), ("68; 68", (68.0, 1.0, False)),
                   ("46A", (46.0, 0.0, False)), ("47S", (np.nan, np.nan, True)),
                   ("DE", (np.nan, np.nan, True)), ("OSS", (np.nan, np.nan, True)),
                   ("UP", (np.nan, 1.0, False)), ("AB", (np.nan, 0.0, False)),
-                  ("68; 71", (np.nan, np.nan, False)), (np.nan, (np.nan, np.nan, False))):
+                  ("68; 71", (np.nan, np.nan, False)), (np.nan, (np.nan, np.nan, False)),
+                  ("60X", (np.nan, np.nan, False)), ("52A", (52.0, 0.0, False)),
+                  ("47S; 47S", (np.nan, np.nan, True))):
     _got = outcome(_v)
     assert all((a == b) or (pd.isna(a) and pd.isna(b)) for a, b in zip(_got, _want)), (_v, _got)
 
@@ -165,11 +179,12 @@ for yr, fn in FILES.items():
     ea = ea.assign(cohort=yr, first_time=ea[yos].astype(str).str.strip().str.lower().str.startswith("first"))
     det = det.assign(course=det["Course Code"].astype(str))
     keep = ["anon_id", "cohort", "first_time"] + PRED
-    demo = {c: c for c in ea.columns if re.search(r"population|gender|^sex$", str(c), re.I)}
-    # One row per student. demo picks up whichever spelling of the demographic columns this
-    # cohort's extract uses (2025 says "Gender" and "Population Grp"; 2024 and 2026 say "Sex"
-    # and "Population Group").
-    base = ea[keep + list(demo)].drop_duplicates("anon_id")
+    # One row per student. The anonymised extracts name the demographic columns "Population Grp"
+    # and "Gender" in every cohort; stop rather than carry a second spelling into the sample.
+    found = [c for c in ea.columns if re.search(r"population|gender|^sex$", str(c), re.I)]
+    if sorted(found) != sorted(DEMO):
+        raise SystemExit(f"{yr}: demographic columns {found}, expected {DEMO}")
+    base = ea[keep + DEMO].drop_duplicates("anon_id")
     # Build the sample twice: once restricted to the four mainstream and augmented course codes
     # (the two-stream sample), once including MAM1005H (the three-stream sample).
     for scope, label in ((TWO_STREAM, "two"), (THREE_STREAM, "three")):
@@ -245,6 +260,12 @@ t.loc["Total"] = t.sum()
 print(t.to_string())
 print("\nOriginal: 202/360/305 (total 867); numeric 146/310/249 (705); below-80 35/59/69 (163)")
 print("2026 now comes from the corrected extract, so only the 2024 and 2025 rows should match.")
+# Sample size and below-80 count must match for 2024 and 2025 under the default rules. (The
+# numeric count is 147 against 146 for 2024: four records read "Pass (numeric result); Pass
+# (numeric result)" in the original status field, which its filter dropped.)
+if PENDING_RULE == "resolve" and _os0.environ.get("TIEBREAK", "most") == "most":
+    for yr, n, b80 in ((2024, 202, 35), (2025, 360, 59)):
+        assert (t.loc[yr, "n"], t.loc[yr, "below80"]) == (n, b80), (yr, t.loc[yr].to_dict())
 
 print("\n" + "=" * 74); print("THE REBUILT THREE-STREAM SAMPLE"); print("=" * 74)
 three = D[(D.scope == "three") & D.first_time & D.complete]
