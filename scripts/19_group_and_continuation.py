@@ -94,7 +94,11 @@ vals |= {"FEmin": f"{min(r[4] for r in named):.1f}",
 # ---- semester 2 continuation ----------------------------------------------
 # 2024 and 2025 only: a 2026 semester-two record is a registration not yet graded or cleaned for
 # the prerequisite, so it says nothing yet about who continued.
-cont = m[m.cohort.isin(["2024", "2025"])].dropna(subset=["nsc"]).copy()
+# Only students with a semester-1 record: one who appears only in a semester-2 course may have
+# come from another course, and would count as continuing by definition.
+cont = m[m.cohort.isin(["2024", "2025"]) & m.s1_course.notna()].dropna(subset=["nsc"]).copy()
+print(f"continuation: {int((m.cohort.isin(['2024', '2025']) & m.s1_course.isna()).sum())} "
+      f"students with no semester-1 record left out")
 cont["grpNSC"] = np.where(cont.nsc >= 80, "80 or above", "below 80")
 crows = []
 for (g, st), s in cont.groupby(["grpNSC", "stream"]):

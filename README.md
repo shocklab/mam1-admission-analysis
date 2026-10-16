@@ -57,7 +57,7 @@ Tables and LaTeX macros are written to `paper/tables/`, figures to `paper/figure
 | `16_figures.py` | Figures 1 to 3. | `fig1_plane.pdf`, `fig2_placement.pdf`, `fig3_tradeoff.pdf` |
 | `17_model_table.py` | A comparison under leave-one-cohort-out validation, with paired bootstrap intervals, of a main-effects linear model, ridge regression and elastic net with spline and pairwise terms, random forest and gradient boosting. It also computes pooled five-fold cross-validation for comparison. | `tab_models.tex`, `anonymised-data/model_oof_predictions.csv` |
 | `18_tiebreak_sensitivity.py` | The placement result under the alternative rule for students with more than one stream record, by re-running script 10. | `values_tiebreak.tex` |
-| `19_group_and_continuation.py` | Differential prediction by population group, with correlations and slopes by group and Cleary tests comparing African students with all other students. It also computes false exclusion at a cut of 80 and Semester 2 course enrolment rates, including students in the sample who appear only in a Semester 2 course. | `tab_groups.tex`, `tab_falseexcl.tex`, `tab_continuation.tex`, `values_groups.tex` |
+| `19_group_and_continuation.py` | Differential prediction by population group, with correlations and slopes by group and Cleary tests comparing African students with all other students. It also computes false exclusion at a cut of 80 and Semester 2 course enrolment rates among students with a Semester 1 record. | `tab_groups.tex`, `tab_falseexcl.tex`, `tab_continuation.tex`, `values_groups.tex` |
 | `20_threshold_decision.py` | Error counts at each candidate cut, a check of the identity that determines where the two error curves cross, the exchange rate between the two kinds of error, and the standard error of the jump at 80. | `values_threshold.tex` |
 | `21_placement_detail.py` | The support-stream comparison by cohort, entry-course pass rates for all three streams, sensitivity to students with more than one Semester 1 stream record, omega-squared and the minimum detectable difference. | `tab_placement_cohort.tex`, `tab_entrycourse.tex`, `values_placement.tex` |
 | `22_admission_interval.py` | The matched-volume admission comparison, with intervals from refitting and re-selecting within each bootstrap replicate, the number of passers a rule with perfect foresight would admit, and the out-of-sample ranking gain. | `tab_admission.tex`, `values_admission.tex`, `values_admission2.tex` |
@@ -65,6 +65,10 @@ Tables and LaTeX macros are written to `paper/tables/`, figures to `paper/figure
 | `37_pending_bounds.py` | The entry-course gap and the two-semester test with results unresolved by the next year's enrolment counted first all as passes, then all as fails. It re-runs script 10 under each rule. | `values_pending.tex` |
 | `36_printed_numbers.py` | The numbers in the paper computed from figures or direct calculation rather than from a table, including the cohort-level t interval for the model comparison. | printed output |
 | `anonymise.py` | De-identification of the institutional extracts, as described above. It reads the protected source folder, which is not part of the repository. | `anonymised-data/` |
+
+## Licence
+
+The code is released under the MIT Licence. See `LICENSE`.
 
 ## Citation
 
