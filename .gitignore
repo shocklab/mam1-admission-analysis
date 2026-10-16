@@ -1,0 +1,10 @@
+# Student data and everything derived from it stay out of the repository.
+anonymised-data/
+Full google doc data/
+paper/
+*.csv
+*.xlsx
+*.xls
+unknown_columns.txt
+__pycache__/
+.DS_Store
