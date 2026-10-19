@@ -41,12 +41,15 @@ python3 scripts/21_placement_detail.py
 python3 scripts/22_admission_interval.py
 python3 scripts/27_two_semester.py
 python3 scripts/37_pending_bounds.py
+python3 scripts/41_volume_sweep.py
+python3 scripts/42_window_sensitivity.py
+python3 scripts/43_check_revision_numbers.py
 python3 scripts/36_printed_numbers.py anonymised-data/paper1_analysis_sample_3streams.csv anonymised-data/model_oof_predictions.csv
 ```
 
-Script 10 runs first because every other script reads the sample it writes. Script 13 runs next because it creates `paper/tables/`. Script 37 runs after scripts 21 and 27 because it checks its point estimates against values they write. Script 36 reads the held-out predictions written by script 17. Scripts 17 and 22 take the longest. Scripts 18 and 37 re-run script 10 in a temporary folder inside `anonymised-data/` and delete the folder when they finish.
+Script 10 runs first because every other script reads the sample it writes. Script 13 runs next because it creates `paper/tables/`. Script 37 runs after scripts 21 and 27 because it checks its point estimates against values they write. Script 36 reads the held-out predictions written by script 17. Scripts 17 and 22 take the longest. Scripts 18 and 37 re-run script 10 in a temporary folder inside `anonymised-data/` and delete the folder when they finish. Script 43 re-runs script 10 in a temporary folder outside the repository and deletes the folder when it finishes.
 
-Tables and LaTeX macros are written to `paper/tables/`, figures to `paper/figures/` and analysis samples to `anonymised-data/`. Script 36 prints its results.
+Tables and LaTeX macros are written to `paper/tables/`, figures to `paper/figures/` and analysis samples to `anonymised-data/`. Scripts 36, 42 and 43 print their results.
 
 ## Scripts
 
@@ -63,6 +66,9 @@ Tables and LaTeX macros are written to `paper/tables/`, figures to `paper/figure
 | `22_admission_interval.py` | The matched-volume admission comparison, with intervals from refitting and re-selecting within each bootstrap replicate, the number of passers a rule with perfect foresight would admit, and the out-of-sample ranking gain. | `tab_admission.tex`, `values_admission.tex`, `values_admission2.tex` |
 | `27_two_semester.py` | Whether NBT Mathematics adds to school-leaving Mathematics in predicting a Semester 1 pass and a pass in both semesters, with Holm-adjusted p-values. Students with no Semester 1 result are excluded. | `values_twosem.tex` |
 | `37_pending_bounds.py` | The entry-course gap and the two-semester test with results unresolved by the next year's enrolment counted first all as passes, then all as fails. It re-runs script 10 under each rule. | `values_pending.tex` |
+| `41_volume_sweep.py` | The matched-volume admission comparison of script 22 at admission volumes from 50% to 90% of each cohort and at the volume implied by the proposed 80% rule. It compares ranking by school-leaving Mathematics, by out-of-fold probabilities from school-leaving Mathematics plus NBT Mathematics, by out-of-fold probabilities from all six measures, and an oracle at each volume. Ties at the boundary of the school-mark ranking are broken at random, and the expected number of passers is reported. Intervals use 300 bootstrap replicates resampled within cohort, with refitting and re-selecting in every replicate. | `tab_volume_sweep.tex` |
+| `42_window_sensitivity.py` | The Section 3.2 comparison of observed pass rates for mainstream students in two NBT Mathematics bands, 50 to 59 and 70 or higher, within windows of school-leaving Mathematics of different widths around 78 and with the window centred on 80. It also prints the fitted pass probability in the lower band. | printed output |
+| `43_check_revision_numbers.py` | The numbers in the paper that no other script produces: the screening counts and comparison of excluded with retained students (Section 3.1), the sensitivity analyses without the 2026 cohort and without passes recorded as a code rather than a mark (Section 3.2), the population-group models with separate intercepts and slopes (Section 3.5), and the mainstream entry-course denominator (Table 12). It prints each beside the value reported in the paper. | printed output |
 | `36_printed_numbers.py` | The numbers in the paper computed from figures or direct calculation rather than from a table, including the cohort-level t interval for the model comparison. | printed output |
 | `anonymise.py` | De-identification of the institutional extracts, as described above. It reads the protected source folder, which is not part of the repository. | `anonymised-data/` |
 
